@@ -63,6 +63,7 @@ async function runDummy() {
     "round1.status": "COMPLETED"
   });
 
+  
   const sorted = sortRound1Leaderboard(completedTeams);
 
   const total = sorted.length;
