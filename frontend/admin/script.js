@@ -76,3 +76,45 @@ function renderLeaderboard() {
 
 // Initial load
 loadTeams();
+
+
+
+
+
+/* =======================
+   🔽 🔽 🔽 ADDITIONS ONLY
+   ======================= */
+
+let leaderboardData = [];
+
+async function loadLeaderboard() {
+  const res = await fetch(`${API}/leaderboard`);
+  leaderboardData = await res.json();
+  renderLeaderboard();
+}
+
+/*
+  OVERRIDE renderLeaderboard
+  (JS will use the latest definition)
+*/
+function renderLeaderboard() {
+  const tbody = document.querySelector("#leaderboard tbody");
+  tbody.innerHTML = "";
+
+  leaderboardData.forEach(team => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${team.rank}</td>
+        <td>${team.teamName}</td>
+        <td>${team.points}</td>
+      </tr>
+    `;
+  });
+}
+
+/* keep leaderboard always in sync */
+const originalLoadTeams = loadTeams;
+loadTeams = async function () {
+  await originalLoadTeams();
+  loadLeaderboard();
+};
