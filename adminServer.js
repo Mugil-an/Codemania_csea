@@ -8,74 +8,135 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
-mongoose.connect("mongodb://127.0.0.1:27017/codemania")
+/* ===============================
+   MongoDB Connection
+================================ */
+mongoose
+  .connect("mongodb://127.0.0.1:27017/codemania")
   .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error(err));
+  .catch(err => console.error("❌ MongoDB error:", err));
 
-// --- API: Get all teams ---
+/* ===============================
+   GET: All Teams (Admin View)
+================================ */
 app.get("/api/admin/teams", async (req, res) => {
   const teams = await Team.find({});
   res.json(teams);
 });
 
-// --- API: Mark question solved ---
+/* ===============================
+   POST: Mark Question Solved
+================================ */
 app.post("/api/admin/solve", async (req, res) => {
   const { teamId, questionIndex } = req.body;
+
   const team = await Team.findById(teamId);
   if (!team) return res.status(404).send("Team not found");
 
   const questionKey = `q${questionIndex + 1}`;
-  if (!team.round1.questionsSolved[questionKey]) {
-    team.round1.questionsSolved[questionKey] = true;
-    team.round1.solvedCount += 1;
 
-    if (!team.round1.startTime) team.round1.startTime = new Date();
-
-    if (team.round1.solvedCount === 5) {
-      team.round1.status = "COMPLETED";
-      team.round1.endTime = new Date();
-      team.round1.totalTime = team.round1.endTime - team.round1.startTime;
-
-      // --- Assign descending points based on order of completion ---
-      const completedTeams = await Team.find({ "round1.status": "COMPLETED" }).sort({ "round1.endTime": 1 });
-      const rank = completedTeams.length; // 1-based rank
-      team.round1.round1Points = Math.max(100 - (rank - 1) * 10, 10); // 100, 90, 80 ...
-      team.totalPoints += team.round1.round1Points;
-    } else {
-      team.round1.status = "IN_PROGRESS";
-    }
-
-    await team.save();
+  // Prevent double solve
+  if (team.round1.questionsSolved[questionKey]) {
+    return res.json({ success: true, team });
   }
 
+  // Mark solved
+  team.round1.questionsSolved[questionKey] = true;
+  team.round1.solvedCount += 1;
+
+  // Start timer on first solve
+  if (!team.round1.startTime) {
+    team.round1.startTime = new Date();
+    team.round1.status = "IN_PROGRESS";
+  }
+
+  // If all 5 solved
+  if (team.round1.solvedCount === 5) {
+    team.round1.status = "COMPLETED";
+    team.round1.endTime = new Date();
+    team.round1.totalTime =
+      team.round1.endTime - team.round1.startTime;
+  }
+
+  await team.save();
   res.json({ success: true, team });
 });
 
-// --- API: Leaderboard ---
+/* ===============================
+   GET: Leaderboard (RANK + POINTS)
+================================ */
 app.get("/api/admin/leaderboard", async (req, res) => {
-  const teams = await Team.find({});
-  const leaderboard = teams
-    .map(t => ({
-      _id: t._id,
-      name: t.teamName,
-      solvedCount: t.round1.solvedCount,
-      points: t.round1.round1Points,
-      totalTime: t.round1.totalTime
-    }))
-    .sort((a,b) => {
-      if (b.solvedCount !== a.solvedCount) return b.solvedCount - a.solvedCount;
-      if (a.totalTime && b.totalTime) return a.totalTime - b.totalTime;
-      return b.points - a.points;
-    });
+  // Only completed teams
+  const teams = await Team.find({
+    "round1.status": "COMPLETED"
+  });
+
+  // Sort by fastest time
+  teams.sort((a, b) => a.round1.totalTime - b.round1.totalTime);
+
+  // Assign points dynamically
+  const leaderboard = teams.map((team, index) => {
+    const points = Math.max(100 - index * 10, 10); // 100, 90, 80...
+
+    return {
+      rank: index + 1,
+      teamId: team._id,
+      teamName: team.teamName,
+      solved: team.round1.solvedCount,
+      time: team.round1.totalTime,
+      points
+    };
+  });
 
   res.json(leaderboard);
 });
 
-// --- Serve frontend ---
+/* ===============================
+   Serve Frontend
+================================ */
 app.use(express.static(path.join(__dirname, "frontend/admin")));
+
 app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "frontend/admin/index.html"));
+  res.sendFile(
+    path.join(__dirname, "frontend/admin/index.html")
+  );
 });
 
-app.listen(5000, () => console.log("🚀 Admin API running on http://localhost:5000"));
+
+app.post("/api/admin/reset-round1", async (req, res) => {
+  try {
+    await Team.updateMany(
+      {},
+      {
+        $set: {
+          round1: {
+            questionsSolved: {
+              q1: false,
+              q2: false,
+              q3: false,
+              q4: false,
+              q5: false
+            },
+            solvedCount: 0,
+            status: "NOT_STARTED",
+            round1Points: 0,
+            completedAt: null
+          }
+        }
+      }
+    );
+
+    res.json({ message: "Round 1 reset successful" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+/* ===============================
+   Start Server
+================================ */
+app.listen(5000, () => {
+  console.log("🚀 Admin Server running at http://localhost:5000");
+});
+
