@@ -203,6 +203,19 @@ export default function IdeInterface() {
                 setIsSolved(questionSolved);
                 
                 // Map API response to expected problem structure
+                const timeLimitMs = data.timeLimit || 1000;
+                const constraints = [];
+
+                if (data.maxInputN) {
+                    constraints.push(`N <= ${data.maxInputN}`);
+                }
+
+                if (data.complexityNote) {
+                    constraints.push(data.complexityNote);
+                }
+
+                constraints.push(`Time limit: ${Math.ceil(timeLimitMs / 1000)}s (~1e8 ops)`);
+
                 const mappedProblem = {
                     id: data._id,
                     title: data.title,
@@ -214,7 +227,8 @@ export default function IdeInterface() {
                     teamsSolved: data.noOfTeamsSolved,
                     difficulty: data.totalPoints <= 100 ? 'Easy' : data.totalPoints <= 200 ? 'Medium' : 'Hard',
                     category: 'Code Optimization',
-                    timeLimit: `${data.timeLimit || 2000}ms`,
+                    timeLimitMs,
+                    timeLimit: `${Math.ceil(timeLimitMs / 1000)}s`,
                     memoryLimit: `${data.memoryLimit || 256}MB`,
                     // Map sample test cases from API
                     sampleTestCases: data.sampleTestCases || [],
@@ -225,7 +239,7 @@ export default function IdeInterface() {
                     })),
                     // These may not exist in backend, provide defaults
                     examples: [],
-                    constraints: [],
+                    constraints,
                     // For code optimization, the starter code is the non-optimized code
                     starterCode: {
                         python: data.nonOptimizedCode || '# Write your optimized code here',
@@ -307,7 +321,7 @@ export default function IdeInterface() {
                 code,
                 language: activeLang,
                 testCases: testCasesToRun,
-                timeLimit: EXECUTION_CONFIG.defaultTimeLimit
+                timeLimit: problem?.timeLimitMs || EXECUTION_CONFIG.defaultTimeLimit
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
