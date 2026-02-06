@@ -33,7 +33,7 @@ export default function AdminDashboard() {
     useEffect(() => {
         const token = getAdminToken();
         if (!token) {
-            navigate('/admin/login');
+            navigate('/admin-login');
             return;
         }
 
@@ -76,7 +76,7 @@ export default function AdminDashboard() {
                 console.error('Error fetching admin data:', err);
                 if (err.response?.status === 401 || err.response?.status === 403) {
                     localStorage.removeItem('adminToken');
-                    navigate('/admin/login');
+                    navigate('/admin-login');
                 } else {
                     setError('Failed to load data. Please try again.');
                 }
@@ -162,7 +162,7 @@ export default function AdminDashboard() {
     // Handle logout
     const handleLogout = () => {
         localStorage.removeItem('adminToken');
-        navigate('/admin/login');
+        navigate('/admin-login');
     };
 
     if (loading) {
